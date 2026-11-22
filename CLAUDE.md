@@ -55,7 +55,7 @@ Stage 2 — Supabase
 - [x] SQL migrations, RLS on every table, private storage buckets, security check script
 - [x] Supabase project `itncungddtelykrhouvv` created; migrations 001 + 002 applied (25 tables RLS-protected, 100 policies, 3 private buckets); owner account created; sign-ups disabled (verified: signup_disabled)
 - [x] `.env.local` connected (gitignored). Verified as anonymous: tables 401, RPC denied, storage list empty
-- [ ] Owner signs in and tests save/load/edit/delete against the real project
+- [x] Owner signed in on the live site successfully (2026-11-22)
 
 Stage 3 — Functional (all persist via `db`)
 - [x] Journal (autosave, prompts, tags, favorites, calendar, search, attachments, D/W/M views, mood links)
