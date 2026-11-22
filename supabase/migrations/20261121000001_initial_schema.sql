@@ -12,6 +12,13 @@
 
 create extension if not exists pgcrypto;
 
+-- Joins a tag list into plain text for full-text search. Marked IMMUTABLE so it can be
+-- used in generated "search" columns (the built-in array_to_string is not).
+create or replace function public.tags_to_text(tags text[])
+returns text language sql immutable parallel safe as $$
+  select coalesce(array_to_string(tags, ' '), '')
+$$;
+
 -- Keeps updated_at current on every update
 create or replace function public.touch_updated_at()
 returns trigger language plpgsql as $$
@@ -125,7 +132,7 @@ create table if not exists public.journal_entries (
   goal_id uuid references public.goals(id) on delete set null,
   attachments jsonb not null default '[]'::jsonb, -- [{ "path", "name", "type", "size" }] in private bucket "attachments"
   search tsvector generated always as (
-    to_tsvector('english', coalesce(title,'') || ' ' || coalesce(body,'') || ' ' || array_to_string(tags,' '))
+    to_tsvector('english', coalesce(title,'') || ' ' || coalesce(body,'') || ' ' || public.tags_to_text(tags))
   ) stored,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -355,7 +362,7 @@ create table if not exists public.knowledge_resources (
   page_count int,
   favorite boolean not null default false,
   search tsvector generated always as (
-    to_tsvector('english', coalesce(title,'') || ' ' || coalesce(author,'') || ' ' || coalesce(description,'') || ' ' || coalesce(personal_notes,'') || ' ' || array_to_string(tags,' '))
+    to_tsvector('english', coalesce(title,'') || ' ' || coalesce(author,'') || ' ' || coalesce(description,'') || ' ' || coalesce(personal_notes,'') || ' ' || public.tags_to_text(tags))
   ) stored,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
