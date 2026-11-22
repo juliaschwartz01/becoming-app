@@ -77,7 +77,8 @@ Stage 4 — AI-ready
 
 Stage 5 — Deployment
 - [x] GitHub Actions workflow (tests → build → Pages), `.gitignore` for secrets/exports
-- [ ] Create `becoming-app` repo, push, enable Pages, add repo variables
+- [x] Create `becoming-app` repo (github.com/juliaschwartz01/becoming-app, public), push, enable Pages (build type: workflow). First run: tests passed, build/deploy skipped pending variables.
+- [ ] Add repo variables `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (`gh variable set`) → site goes live at https://juliaschwartz01.github.io/becoming-app/
 - [ ] Supabase Auth Site URL + redirect URLs; test live login, cross-device persistence, signed-out access
 
 Stage 6 — Testing
