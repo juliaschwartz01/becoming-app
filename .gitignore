@@ -1,0 +1,17 @@
+node_modules
+dist
+.DS_Store
+*.local
+.env
+.env.*
+!.env.example
+coverage
+supabase/.temp
+supabase/.branches
+# Never commit personal exports or photos
+exports/
+*.becoming-export.json
+
+# Local tool settings (contain local paths)
+.claude/
+*.tsbuildinfo

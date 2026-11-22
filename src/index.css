@@ -1,0 +1,95 @@
+@import "tailwindcss";
+@import "@fontsource/cormorant-garamond/400.css";
+@import "@fontsource/cormorant-garamond/500.css";
+@import "@fontsource/cormorant-garamond/600.css";
+@import "@fontsource/cormorant-garamond/400-italic.css";
+@import "@fontsource/cormorant-garamond/500-italic.css";
+@import "@fontsource-variable/dm-sans";
+
+@theme {
+  --font-display: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
+  --font-sans: "DM Sans Variable", "Helvetica Neue", system-ui, sans-serif;
+
+  --color-ivory: #fbf8f3;
+  --color-cream: #f5eee4;
+  --color-linen: #efe6d8;
+  --color-beige: #e6dac8;
+  --color-sand: #d4c5b1;
+  --color-taupe: #a8978a;
+  --color-taupe-deep: #85766a;
+  --color-ink: #3b342e;
+  --color-ink-soft: #6f645a;
+  --color-sage-50: #f0f2eb;
+  --color-sage-100: #e1e7d9;
+  --color-sage-200: #c9d3bd;
+  --color-sage: #8d9c7e;
+  --color-sage-deep: #64725a;
+  --color-blush-50: #f8eeea;
+  --color-blush-100: #f1dfd8;
+  --color-blush: #d6b1a6;
+  --color-blush-deep: #b48678;
+
+  --radius-xl2: 1.25rem;
+  --shadow-soft: 0 1px 2px rgba(59, 52, 46, 0.04), 0 8px 24px -12px rgba(59, 52, 46, 0.12);
+  --shadow-lift: 0 2px 4px rgba(59, 52, 46, 0.05), 0 18px 40px -18px rgba(59, 52, 46, 0.22);
+
+  --animate-rise: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-fade: fade 0.35s ease both;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--color-ivory);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3, .font-display { font-family: var(--font-display); font-weight: 500; letter-spacing: -0.01em; }
+  ::selection { background: var(--color-blush-100); }
+  :focus-visible { outline: 2px solid var(--color-sage); outline-offset: 2px; border-radius: 6px; }
+  input, textarea, select, button { font: inherit; color: inherit; }
+  textarea { resize: vertical; }
+}
+
+@layer components {
+  .eyebrow {
+    font-family: var(--font-sans);
+    font-size: 0.68rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-taupe-deep);
+  }
+  .paper {
+    background-color: var(--color-ivory);
+    background-image:
+      radial-gradient(1200px 600px at 100% -10%, rgba(214, 177, 166, 0.10), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(141, 156, 126, 0.10), transparent 60%);
+  }
+  .grain::after {
+    content: "";
+    position: absolute; inset: 0;
+    pointer-events: none;
+    opacity: 0.35;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.4 0 0 0 0 0.35 0 0 0 0.08 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+  .prose-journal { font-family: var(--font-display); font-size: 1.28rem; line-height: 1.7; }
+  .scroll-soft { scrollbar-width: thin; scrollbar-color: var(--color-sand) transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

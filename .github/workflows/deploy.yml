@@ -1,0 +1,68 @@
+# Builds Becoming and publishes it to GitHub Pages on every push to "main".
+# Supabase values come from repository *variables* (Settings → Secrets and variables → Actions → Variables).
+# They are public-safe: your data is protected by Supabase Row Level Security, not by hiding these.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Note when Supabase isn't configured yet
+        if: ${{ vars.VITE_SUPABASE_URL == '' }}
+        run: echo "::notice::Tests passed. Publishing is skipped until VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY are added under Settings → Secrets and variables → Actions → Variables."
+
+  build:
+    needs: test
+    # The live site is only published once it can connect to Supabase (never in preview mode).
+    if: ${{ vars.VITE_SUPABASE_URL != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_AI_ENABLED: ${{ vars.VITE_AI_ENABLED || 'false' }}
+          VITE_IMAGE_GENERATION_ENABLED: ${{ vars.VITE_IMAGE_GENERATION_ENABLED || 'false' }}
+          VITE_TRANSCRIPTION_ENABLED: ${{ vars.VITE_TRANSCRIPTION_ENABLED || 'false' }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
