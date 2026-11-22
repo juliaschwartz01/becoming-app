@@ -1,9 +1,10 @@
 import { db, uuid } from './db'
+import { isArtifact } from './config'
 import { requireUserId } from './auth'
 import { chunkText, safeFileName } from './utils'
 import type { KnowledgePassage, KnowledgeResource } from './types'
 
-export const MAX_FILE = 50 * 1024 * 1024 // Supabase free plan per-file limit
+export const MAX_FILE = (isArtifact ? 20 : 50) * 1024 * 1024 // claude.ai asset limit / Supabase free plan limit
 
 /** Replace a resource's searchable passages with freshly chunked text. */
 export async function replacePassages(resourceId: string, pages: { page: number | null; text: string }[]) {
@@ -14,10 +15,9 @@ export async function replacePassages(resourceId: string, pages: { page: number 
 }
 
 export async function uploadKnowledgeFile(file: File) {
-  if (file.size > MAX_FILE) throw new Error(`“${file.name}” is larger than 50 MB, the free-plan limit per file.`)
+  if (file.size > MAX_FILE) throw new Error(`“${file.name}” is larger than ${MAX_FILE / 1024 / 1024} MB, the limit per file.`)
   const path = `${requireUserId()}/${uuid()}-${safeFileName(file.name)}`
-  await db.upload('knowledge', path, file, file.type || undefined)
-  return path
+  return db.upload('knowledge', path, file, file.type || undefined)
 }
 
 export async function deleteResource(r: KnowledgeResource) {

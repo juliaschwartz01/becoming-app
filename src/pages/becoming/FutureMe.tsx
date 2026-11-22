@@ -46,7 +46,7 @@ export default function FutureMe() {
           )
         }}
       />
-      <p className="mt-6 max-w-3xl text-[12.5px] text-taupe-deep">Future Me is an imaginative reflection exercise. Anything your future self says is a creative perspective built from your own goals and words — never a prediction of what will happen. Live conversations require a connected AI model.</p>
+      <p className="mt-6 max-w-3xl text-[12.5px] text-taupe-deep">Future Me is an imaginative reflection exercise. Anything your future self says is a creative perspective built from your own goals and words — never a prediction of what will happen. Live conversations use Claude through your own Claude account.</p>
     </>
   )
 }

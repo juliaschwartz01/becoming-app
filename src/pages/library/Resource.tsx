@@ -135,7 +135,7 @@ export default function ResourcePage() {
           )}
           <Card className="p-6 text-[13.5px] text-ink-soft">
             <p className="mb-1 font-medium text-ink">How this is used</p>
-            This source belongs to your Knowledge Library, kept separate from memories about you. When an AI model is connected, the coach and “Ask my library” can retrieve these passages and cite them with page numbers.
+            This source belongs to your Knowledge Library, kept separate from memories about you. The coach and “Ask my library” retrieve these passages and cite them with page numbers.
             <Link to={`/library/ask`} className="mt-3 block underline decoration-sand underline-offset-2">Search with Ask my library →</Link>
           </Card>
         </aside>

@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertTriangle, CheckCircle2, CircleDashed, Download, KeyRound, LogOut } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { useProfile } from '../lib/profile'
-import { config, isPreview } from '../lib/config'
+import { config, isArtifact, isPreview } from '../lib/config'
+import { artifactUsage } from '../lib/artifact'
 import { aiStatus } from '../ai'
 import { EVENING_PRACTICES, MORNING_PRACTICES, DEFAULT_AFFIRMATIONS } from '../data/content'
-import { deleteAllData, exportAllData, exportEverythingZip } from '../lib/account'
-import { downloadBlob, downloadJSON, splitLines } from '../lib/utils'
+import { deleteAllData, exportAllData, exportEverythingZip, importData } from '../lib/account'
+import { bytes, downloadBlob, downloadJSON, splitLines } from '../lib/utils'
 import { Button, Card, Chip, Field, Input, Modal, PageHeader, SectionTitle, Textarea, useAction, useFeedback } from '../components/ui'
 
 export default function Settings() {
@@ -46,7 +47,7 @@ function Account() {
         <Button type="submit" className="self-end">Save</Button>
       </form>
       <p className="mt-2 text-[12.5px] text-taupe-deep">More about you lives on <Link to="/memory" className="underline decoration-sand underline-offset-2">What my AI knows</Link>.</p>
-      {!isPreview && (
+      {!isPreview && !isArtifact && (
         <div className="mt-6 space-y-3 border-t border-beige/70 pt-5">
           <p className="flex items-center gap-2 text-[14px] font-medium"><KeyRound className="size-4" /> Change password</p>
           <Input type="password" autoComplete="new-password" placeholder="New password (10+ characters)" value={pw} onChange={(e) => setPw(e.target.value)} />
@@ -54,7 +55,9 @@ function Account() {
           <Button loading={busy} disabled={!pw || !pw2} onClick={change}>Update password</Button>
         </div>
       )}
-      <Button variant="ghost" className="mt-6" icon={<LogOut className="size-4" />} onClick={auth.signOut}>Sign out</Button>
+      {isArtifact
+        ? <p className="mt-6 text-[13px] text-ink-soft">Becoming opens with your Claude account. To sign out, sign out of claude.ai.</p>
+        : <Button variant="ghost" className="mt-6" icon={<LogOut className="size-4" />} onClick={auth.signOut}>Sign out</Button>}
     </Card>
   )
 }
@@ -100,6 +103,27 @@ function Status({ ok, label, detail }: { ok: boolean; label: string; detail: str
 }
 
 function AIConnection() {
+  const [usage, setUsage] = useState<Awaited<ReturnType<typeof artifactUsage>>>(null)
+  useEffect(() => { if (isArtifact) artifactUsage().then(setUsage) }, [])
+  if (isArtifact) {
+    return (
+      <Card className="p-6 sm:p-7">
+        <SectionTitle>Connections</SectionTitle>
+        <ul className="divide-y divide-beige/60">
+          <Status ok label="Private storage on claude.ai" detail="Your journal, memories, goals and boards are saved in this artifact’s storage, in a space only your Claude account can read." />
+          <Status ok={aiStatus.chat} label="Claude" detail="The confidante, coach, Future Me, Ask my library, plan drafts and vision ideas use your own Claude account — no API key, no separate bill. Use counts toward your Claude plan." />
+          <Status ok={false} label="Image generation" detail="Claude writes but doesn’t create pictures. Upload your own images, or paste Claude’s image prompts into an image tool you already use." />
+        </ul>
+        {usage && (
+          <div className="mt-4">
+            <div className="flex justify-between text-[12.5px] text-ink-soft"><span>File storage</span><span>{bytes(usage.bytes)} of {bytes(usage.maxBytes)} · {usage.files} files</span></div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-linen"><div className="h-full rounded-full bg-sage" style={{ width: `${Math.min(100, (usage.bytes / Math.max(usage.maxBytes, 1)) * 100)}%` }} /></div>
+          </div>
+        )}
+        <p className="mt-4 text-[12px] text-taupe-deep">Keep this artifact private: don’t share its link. Anyone it’s shared with would get their own separate, empty space — never yours — but it’s simplest to keep it to yourself.</p>
+      </Card>
+    )
+  }
   return (
     <Card className="p-6 sm:p-7">
       <SectionTitle>Connections</SectionTitle>
@@ -125,6 +149,7 @@ function DataControls() {
   const [busy, setBusy] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [typed, setTyped] = useState('')
+  const importInput = useRef<HTMLInputElement>(null)
   const stamp = new Date().toISOString().slice(0, 10)
   const go = async (fn: () => Promise<void>, ok: string) => {
     setBusy(true)
@@ -141,9 +166,20 @@ function DataControls() {
       {progress && <p className="mt-3 text-[12.5px] text-taupe-deep">{progress}</p>}
       <p className="mt-3 text-[12px] text-taupe-deep">Keep exports somewhere private — never add them to the GitHub project folder.</p>
 
+      <div className="mt-6 border-t border-beige/70 pt-5">
+        <p className="text-[14.5px] font-medium">Import from a Becoming export</p>
+        <p className="mt-1 text-[13px] text-ink-soft">Bring in records from a .json export (for example from the website version). Items you already have are skipped. Files aren’t included in .json exports.</p>
+        <input ref={importInput} type="file" accept="application/json,.json" className="hidden" onChange={(e) => {
+          const f = e.target.files?.[0]; e.target.value = ''
+          if (!f) return
+          go(async () => { const n = await importData(JSON.parse(await f.text()), setProgress); await reload(); toast(`${n} item${n === 1 ? '' : 's'} imported`) }, 'Import finished')
+        }} />
+        <Button className="mt-3" disabled={busy} onClick={() => importInput.current?.click()}>Choose export file…</Button>
+      </div>
+
       <div className="mt-8 rounded-2xl border border-[#ead2cb] bg-[#fbf3f0] p-5">
         <p className="flex items-center gap-2 text-[14.5px] font-medium text-[#7d4339]"><AlertTriangle className="size-4" /> Delete all my data</p>
-        <p className="mt-1 text-[13px] text-[#7d4339]/80">Permanently deletes every journal entry, conversation, memory, goal, board, image, document and file. Your login remains (remove it in Supabase → Authentication → Users). Export first if you might want anything back.</p>
+        <p className="mt-1 text-[13px] text-[#7d4339]/80">Permanently deletes every journal entry, conversation, memory, goal, board, image, document and file.{isArtifact ? '' : ' Your login remains (remove it in Supabase → Authentication → Users).'} Export first if you might want anything back.</p>
         <Button variant="danger" className="mt-3" onClick={() => { setTyped(''); setDeleteOpen(true) }}>Delete all data…</Button>
       </div>
 

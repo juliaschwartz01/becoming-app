@@ -4,7 +4,7 @@ import { BookOpen, Brain, Compass, Feather, Home, LogOut, Menu, Settings, Sparkl
 import { useAuth } from '../lib/auth'
 import { useProfile } from '../lib/profile'
 import { cx } from '../lib/utils'
-import { isPreview } from '../lib/config'
+import { isArtifact, isPreview } from '../lib/config'
 
 export const NAV = [
   { to: '/', label: 'Home', sub: 'My sanctuary', icon: Home, end: true },
@@ -70,9 +70,9 @@ export default function Layout() {
             <Icon className="size-4" strokeWidth={1.5} /> {label}
           </NavLink>
         ))}
-        <button onClick={signOut} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[13.5px] text-ink-soft transition hover:bg-white/50 hover:text-ink cursor-pointer">
+        {!isArtifact && <button onClick={signOut} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[13.5px] text-ink-soft transition hover:bg-white/50 hover:text-ink cursor-pointer">
           <LogOut className="size-4" strokeWidth={1.5} /> Sign out
-        </button>
+        </button>}
         {profile?.preferred_name && <p className="px-3 pt-3 font-display text-[15px] italic text-taupe-deep">for {profile.preferred_name}</p>}
       </div>
     </div>

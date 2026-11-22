@@ -1,3 +1,5 @@
+import { isArtifact } from './config'
+import { artifactSave } from './artifact'
 import { format, parseISO, isValid } from 'date-fns'
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ')
@@ -50,7 +52,9 @@ export function bytes(n: number | null | undefined) {
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
-export function downloadBlob(blob: Blob, filename: string) {
+/** Save a file to the viewer's device. Inside claude.ai this asks the viewer to confirm. */
+export async function downloadBlob(blob: Blob, filename: string): Promise<void> {
+  if (isArtifact) return artifactSave(filename, blob)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -61,8 +65,8 @@ export function downloadBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 2000)
 }
 
-export function downloadJSON(data: unknown, filename: string) {
-  downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), filename)
+export function downloadJSON(data: unknown, filename: string): Promise<void> {
+  return downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), filename)
 }
 
 /**

@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { ArrowUp, BookOpen, Eye, MessageCircle, Pencil, Plus, Trash2, Unplug } from 'lucide-react'
 import { db } from '../lib/db'
 import { useData } from '../lib/hooks'
-import type { Conversation, ConversationKind, Message } from '../lib/types'
-import { aiStatus, buildContext, sendChat, type ContextBundle } from '../ai'
+import type { Conversation, ConversationKind, Memory, Message } from '../lib/types'
+import { aiStatus, buildContext, sendChat, suggestMemories, type ContextBundle } from '../ai'
 import { useProfile } from '../lib/profile'
 import { Button, Card, EmptyState, ErrorState, IconButton, Loading, Modal, Spinner, Textarea, useAction, useFeedback } from './ui'
 import { cx, fmt, highlightParts } from '../lib/utils'
@@ -123,10 +123,34 @@ export default function ChatPanel(props: ChatPanelProps) {
 
   const startNew = () => { setActiveId(null); setMessages([]); setDraftConv(props.newConversationDefaults?.() ?? {}) }
 
+  const [streamText, setStreamText] = useState<string | null>(null)
+  const ctl = useRef<AbortController | null>(null)
+
+  /** Ask Claude to answer the latest user message in this conversation. */
+  const reply = async (conv: Conversation, body: string) => {
+    ctl.current = new AbortController()
+    setStreamText('')
+    try {
+      const context = await buildContext({ kind, message: body, conversationId: conv.id, goalId: conv.goal_id, extra: { ...props.contextExtra?.(conv), ...conv.context } })
+      const r = await sendChat({ kind, mode: conv.mode, message: body, context, signal: ctl.current.signal, onText: (t) => setStreamText(t) })
+      const aiMsg = await db.insert<Message>('messages', { conversation_id: conv.id, role: 'assistant', content: r.content, citations: r.citations ?? [], memory_ids: r.memory_ids ?? [] })
+      setMessages((m) => [...m, aiMsg])
+      if (prefs?.memory_suggestions_enabled) {
+        // Lasting facts only, kept separate until approved on the Memory page.
+        const known = (await db.list<Memory>('memories', { limit: 200 })).map((m) => m.content)
+        const found = r.suggested_memories?.length ? r.suggested_memories : await suggestMemories(body, known).catch(() => [])
+        if (found.length) await db.insertMany('memories', found.map((c) => ({ content: c, origin: 'ai_inferred', status: 'pending', source_conversation_id: conv.id })))
+      }
+    } finally {
+      setStreamText(null)
+      ctl.current = null
+    }
+  }
+
   const send = async (content: string) => {
     const body = content.trim()
     if (!body || sending) return
-    setSending(true)
+    setSending(true); setMsgError(null)
     try {
       let conv = active
       if (!conv) {
@@ -140,20 +164,19 @@ export default function ChatPanel(props: ChatPanelProps) {
       setMessages((m) => [...m, userMsg])
       setText('')
       await db.update<Conversation>('conversations', conv.id, { updated_at: new Date().toISOString() } as Partial<Conversation>)
-      if (aiStatus.chat) {
-        const context = await buildContext({ kind, message: body, conversationId: conv.id, goalId: conv.goal_id, extra: { ...props.contextExtra?.(conv), ...conv.context } })
-        const reply = await sendChat({ kind, mode: conv.mode, message: body, context })
-        const aiMsg = await db.insert<Message>('messages', { conversation_id: conv.id, role: 'assistant', content: reply.content, citations: reply.citations ?? [], memory_ids: reply.memory_ids ?? [] })
-        setMessages((m) => [...m, aiMsg])
-        if (reply.suggested_memories?.length && prefs?.memory_suggestions_enabled) {
-          await db.insertMany('memories', reply.suggested_memories.map((c) => ({ content: c, origin: 'ai_inferred', status: 'pending', source_conversation_id: conv!.id })))
-        }
-      }
+      if (aiStatus.chat) await reply(conv, body)
     } catch (e) {
       setMsgError((e as Error).message)
     } finally {
       setSending(false)
     }
+  }
+
+  const retry = async () => {
+    const last = messages[messages.length - 1]
+    if (!active || !last || last.role !== 'user' || sending) return
+    setSending(true); setMsgError(null)
+    try { await reply(active, last.content) } catch (e) { setMsgError((e as Error).message) } finally { setSending(false) }
   }
 
   const showContext = async (message: string) => {
@@ -210,7 +233,7 @@ export default function ChatPanel(props: ChatPanelProps) {
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-6 sm:px-7 scroll-soft">
           {!aiStatus.chat && <AISetupNotice />}
-          {msgError && <ErrorState message={msgError} onRetry={() => activeId && loadMessages(activeId)} />}
+          {msgError && <ErrorState message={msgError} />}
           {loadingMsgs ? <Loading label="Opening conversation…" /> : messages.length === 0 ? (
             <EmptyState
               icon={<MessageCircle className="size-7" strokeWidth={1.2} />}
@@ -243,7 +266,19 @@ export default function ChatPanel(props: ChatPanelProps) {
               {!aiStatus.chat && lastUserWithoutReply(i) && <p className="mt-1 text-[11.5px] italic text-taupe-deep">Saved. No reply — an AI model isn’t connected.</p>}
             </div>
           ))}
-          {sending && <div className="flex items-center gap-2 text-[13px] text-taupe-deep"><Spinner className="size-4" /> {aiStatus.chat ? 'Thinking…' : 'Saving…'}</div>}
+          {streamText ? (
+            <div className="flex flex-col items-start animate-fade">
+              <div className="max-w-[85%] whitespace-pre-wrap rounded-3xl rounded-bl-lg bg-linen/80 px-5 py-3 text-[15px] leading-relaxed text-ink">{streamText}</div>
+              <button onClick={() => ctl.current?.abort()} className="mt-1 text-[11.5px] text-taupe-deep hover:text-ink cursor-pointer">Stop</button>
+            </div>
+          ) : sending && (
+            <div className="flex items-center gap-2 text-[13px] text-taupe-deep"><Spinner className="size-4" /> {aiStatus.chat ? 'Thinking…' : 'Saving…'}
+              {streamText !== null && <button onClick={() => ctl.current?.abort()} className="ml-2 underline decoration-sand underline-offset-2 cursor-pointer">Stop</button>}
+            </div>
+          )}
+          {aiStatus.chat && !sending && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
+            <div><Button size="sm" variant="secondary" onClick={retry}>Get a reply</Button></div>
+          )}
           <div ref={endRef} />
         </div>
 

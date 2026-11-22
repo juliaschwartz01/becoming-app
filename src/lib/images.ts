@@ -15,8 +15,7 @@ export async function saveVisionImage(file: Blob, opts: { name?: string; categor
   if (!file.type.startsWith('image/')) throw new Error('That file isn’t an image.')
   const { width, height } = await imageSize(file)
   const name = safeFileName(opts.name || `image.${file.type.split('/')[1] || 'png'}`)
-  const path = `${requireUserId()}/${uuid()}-${name}`
-  await db.upload('vision-images', path, file, file.type)
+  const path = await db.upload('vision-images', `${requireUserId()}/${uuid()}-${name}`, file, file.type)
   try {
     return await db.insert<VisionImage>('vision_images', {
       storage_path: path, title: opts.title ?? null, category: opts.category ?? 'lifestyle', board_id: opts.board_id ?? null,

@@ -7,7 +7,7 @@ import type { BoardElement, VisionBoard, VisionImage } from '../../lib/types'
 import { CATEGORIES, categoryLabel } from '../../data/content'
 import { aiStatus, generateImages } from '../../ai'
 import { dataUrlToBlob, deleteVisionImage, saveVisionImage } from '../../lib/images'
-import { cx, downloadBlob, fmt } from '../../lib/utils'
+import { cx, downloadBlob, fmt, safeFileName } from '../../lib/utils'
 import { Button, Card, Chip, EmptyState, ErrorState, Field, IconButton, Input, Loading, Modal, PageHeader, SectionTitle, Select, Spinner, Textarea, useAction, useFeedback } from '../../components/ui'
 
 export default function Envision() {
@@ -111,7 +111,8 @@ function ImageCollection({ images, boards }: { images: ReturnType<typeof useData
   }
   const download = (img: VisionImage) => run(async () => {
     const blob = await db.download('vision-images', img.storage_path)
-    downloadBlob(blob, img.storage_path.split('/').pop()!.replace(/^[0-9a-f-]{36}-/, ''))
+    const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg')
+    await downloadBlob(blob, `${safeFileName(img.title || 'vision-image')}.${ext}`.replace(/\.[a-z0-9]+\.([a-z0-9]+)$/, '.$1'))
   })
 
   return (

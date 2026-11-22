@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, PREVIEW_USER_ID } from './db'
-import { isPreview } from './config'
+import { isArtifact, isPreview } from './config'
+import { artifactSession } from './artifact'
 
 interface AuthState {
   loading: boolean
@@ -31,6 +32,12 @@ const PREVIEW_FLAG = 'becoming-preview:entered'
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(!isPreview)
+  const [artifactUid, setArtifactUid] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!isArtifact) return
+    artifactSession().then(({ uid }) => { setArtifactUid(uid); setLoading(false) })
+  }, [])
   const [previewIn, setPreviewIn] = useState(() => isPreview && safeGet(PREVIEW_FLAG) === '1')
   const [recovering, setRecovering] = useState(() => new URLSearchParams(window.location.search).has('recovery'))
 
@@ -47,13 +54,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe()
   }, [])
 
-  const userId = isPreview ? (previewIn ? PREVIEW_USER_ID : null) : session?.user.id ?? null
+  const userId = isArtifact ? artifactUid : isPreview ? (previewIn ? PREVIEW_USER_ID : null) : session?.user.id ?? null
   currentUserId = userId
 
   const value = useMemo<AuthState>(() => ({
     loading,
     userId,
-    email: isPreview ? 'preview@this-browser' : session?.user.email ?? null,
+    email: isArtifact ? 'your Claude account' : isPreview ? 'preview@this-browser' : session?.user.email ?? null,
     preview: isPreview,
     recovering,
     async signIn(email, password) {
@@ -84,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       url.searchParams.delete('code')
       window.history.replaceState(null, '', url.pathname + url.search + (url.hash || '#/'))
     },
-  }), [loading, userId, session, recovering])
+  }), [loading, userId, session, recovering, artifactUid])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

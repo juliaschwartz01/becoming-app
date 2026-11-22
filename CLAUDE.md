@@ -2,8 +2,13 @@
 
 Guidance for Claude Code when maintaining this project. The owner is a non-technical beginner: explain manual steps plainly (which site, where to click, what to copy, why), never ask for secrets in chat beyond the public Supabase URL/publishable key, and make reasonable decisions without unnecessary questions.
 
+## Two ways Becoming runs (decided 2026-11-22)
+1. **claude.ai artifact — the main version.** the owner's private artifact titled "Becoming" (find its link with the Artifact tool's list action; kept out of this public repo). Data in the artifact's private per-user db subtree (`data/users/<id>/tables/<table>/…`) and asset store; AI through the `sample` capability on the owner's own Claude account (no API key, no extra cost — the owner explicitly chose this over paid APIs). Build with `npm run build:artifact` → `dist-artifact/` (page.html + files.json), then publish `dist-artifact/page.html` with the Artifact tool to that artifact, passing every entry of `files.json` as `files` (the `.mjs` worker needs `contentType: text/javascript`) and capabilities `{db:{}, user:{}, assets:{}, sample:{}, downloads:true}`. Hashed asset names change on rebuild: pass `null` for files that disappeared.
+2. **GitHub Pages website + Supabase** — still deployed (https://juliaschwartz01.github.io/becoming-app/), AI off there. Kept as an alternative; the owner may retire it later.
+The artifact cannot reach Supabase (claude.ai blocks outside network requests), so the two versions don't share data. Settings → Import moves a .json export from the website into the artifact.
+
 ## Hard rules
-- Services allowed: **GitHub (code + Pages), Supabase (DB, Auth, Storage, Edge Functions)**. No Vercel/Netlify/Firebase/AWS/other DBs. No paid API or AI provider without the owner’s explicit approval.
+- Services: **claude.ai artifact (main), GitHub (code + Pages), Supabase (website data)**. No Vercel/Netlify/Firebase/AWS/other DBs. **No paid API or AI provider** — the owner declined extra costs (Claude API and OpenAI API were both explained and declined on 2026-11-22).
 - **Never commit** personal data, exports, photos, `.env*` files, or any secret. The repo is public (GitHub Free + Pages).
 - **Never fake AI.** If a model isn’t configured, show the setup-required state. No simulated replies, no fake success toasts.
 - Original reference photos of the owner must **never** be uploaded to Storage, saved in the DB, added to the library or committed. Only finished images the owner explicitly chooses to “Keep” go to the private `vision-images` bucket.
@@ -22,11 +27,15 @@ Commands: `npm run dev` · `npm test` · `npm run build` · `npx tsc -b`.
 
 ## Architecture
 - `src/lib/config.ts` — env config. No Supabase env → **preview mode** (LocalBackend, browser-only, clearly bannered). Live site always has Supabase (deploy workflow fails without it).
-- `src/lib/db.ts` — `db` Backend interface: `SupabaseBackend` (paginates past 1000 rows, strips generated `search` columns on update) and `LocalBackend` (localStorage + IndexedDB files, mirrors SQL defaults, unique keys and ON DELETE CASCADE). All pages use `db`, never `supabase.from` directly.
+- `src/lib/db.ts` — picks the backend: `ArtifactBackend` (claude.ai), `SupabaseBackend` (website; paginates past 1000 rows, strips generated `search` columns) or `LocalBackend` (preview). All pages use `db`, never `supabase.from` directly. `db.upload()` returns the stored path/id to keep.
+- `src/lib/store-core.ts` — shared types, `MemoryBackend` (in-memory tables with a pluggable `RowStore`; mirrors SQL defaults, unique keys, ON DELETE CASCADE, simple keyword search) and `LocalBackend`.
+- `src/lib/artifact.ts` — claude.ai runtime: per-user db row store (knowledge passages grouped 40 per document; 256 KiB/doc, 25k docs per artifact), asset store files (types the store can't hold are kept as base64 text, ≤14 MB; native types ≤20 MB), downloads, `getSample()`.
+- In the artifact build: `MemoryRouter` (claude.ai only passes plain #names), no login screen (identity = Claude account), downloads via the `downloads` capability, no print, and `scripts/artifact-page.mjs` escapes raw control characters claude.ai rejects.
 - `src/lib/auth.tsx` — sign-in, reset (`?recovery=1` + PKCE code), `requireUserId()` (storage paths must start with the user id).
 - `src/lib/profile.tsx` — profile + preferences context (dashboard widgets, rituals, affirmations, memory-suggestion toggle).
 - `src/lib/hooks.ts` — `useData` (loading/error/retry), `useAutosave` (debounced, flushes on unmount), signed URL cache.
-- `src/ai/index.ts` — `buildContext()` (real retrieval: relevant verified memories via `search_memories`, active goals, evidence when asking for encouragement, library passages via `search_passages`, last 12 messages; knowledge and personal memory kept separate), `sendChat/generateImages/transcribe` call Edge Functions only when the matching `VITE_*_ENABLED` flag is true.
+- `src/ai/prompts.ts` — the instructions for each conversation kind.
+- `src/ai/index.ts` — `sendChat` (claude.ai: `sample` with streaming; website: Edge Function, off), `askClaudeJSON` (vision ideas, plan drafts), `suggestMemories` (only when the owner's toggle is on; suggestions stay pending until approved), `buildContext()` (real retrieval: relevant verified memories via `search_memories`, active goals, evidence when asking for encouragement, library passages via `search_passages`, last 12 messages; knowledge and personal memory kept separate), `sendChat/generateImages/transcribe` call Edge Functions only when the matching `VITE_*_ENABLED` flag is true.
 - `src/components/ChatPanel.tsx` — shared chat UI for confidante, coach, future_self, library. Saves user messages; shows “What the AI would see”.
 - `supabase/functions/ai-chat` — persona/system prompts, citation mapping, `callModel()` stub. Returns 503 `not_configured` until a provider is approved. `ai-image`, `ai-transcribe` are stubs with privacy rules.
 - Storage buckets (private): `knowledge`, `vision-images`, `attachments`; path `<uid>/...` enforced by storage policies.
@@ -36,7 +45,7 @@ Commands: `npm run dev` · `npm test` · `npm run build` · `npx tsc -b`.
 `002_private_storage.sql`: buckets + owner-folder storage policies.
 Keep `src/lib/types.ts` and `LocalBackend` defaults in sync with any schema change.
 
-## Connecting an AI provider later (only with approval)
+## Connecting a paid AI provider to the website (only with approval — currently declined)
 1. Owner chooses a provider; explain cost, privacy and retention first.
 2. Install Supabase CLI, `supabase login`, `supabase link --project-ref <ref>`.
 3. `supabase secrets set AI_PROVIDER=<name> AI_API_KEY=<key>` (owner types the key in their own terminal).
@@ -69,6 +78,11 @@ Stage 3 — Functional (all persist via `db`)
 - [x] Memory page (profile, verified memories, pending AI suggestions separated, toggle, export)
 - [x] Life chapters, milestones, Evidence Wall, Timeline, Monthly Report (deterministic, saved, print/PDF)
 - [x] Settings: account, change password, rituals, affirmations, connection status, export JSON/ZIP, delete all data
+
+Stage 4b — claude.ai artifact (2026-11-22)
+- [x] ArtifactBackend (private per-user storage + assets), Claude via `sample` in confidante/coach/Future Me/Ask my library, "Ask Claude for ideas" on vision boards, "Suggest a plan" on goals, memory suggestions, import from website export
+- [x] Published privately as the claude.ai artifact "Becoming"
+- [ ] Owner opens it, allows Claude, and tests saving + a conversation (not yet verified — the session's browser isn't signed in to claude.ai)
 
 Stage 4 — AI-ready
 - [x] Confidante (6 modes), Coach (goal focus, starters), Future Me (year/chapter/goal/areas), Ask my library — setup-required states, saved threads

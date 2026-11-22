@@ -5,7 +5,7 @@ import { db, uuid } from '../../lib/db'
 import { useAutosave, useData } from '../../lib/hooks'
 import type { Goal, JournalEntry, LifeChapter, ManifestationPlan, PlanAction, PracticeSession, Reminder, VisionBoard } from '../../lib/types'
 import { categoryLabel, methodByKey } from '../../data/content'
-import { aiStatus } from '../../ai'
+import { aiStatus, askClaudeJSON } from '../../ai'
 import { cx, fmt, splitLines } from '../../lib/utils'
 import { Badge, Button, Card, ErrorState, Field, IconButton, Input, Loading, Modal, SaveStatus, Textarea, useAction, useFeedback } from '../../components/ui'
 import { GoalForm } from './Goals'
@@ -32,7 +32,8 @@ export default function GoalDetail() {
   const [editing, setEditing] = useState<Partial<Goal> | null>(null)
   const [newAction, setNewAction] = useState('')
   const { run, busy } = useAction()
-  const { confirm } = useFeedback()
+  const { confirm, toast } = useFeedback()
+  const [drafting, setDrafting] = useState(false)
 
   useEffect(() => {
     db.list<ManifestationPlan>('manifestation_plans', { match: { goal_id: id } }).then((r) => {
@@ -64,6 +65,35 @@ export default function GoalDetail() {
   const remove = async () => {
     if (!(await confirm({ title: 'Delete this goal?', body: 'The goal and its plan will be permanently deleted. Linked journal entries and practices are kept but unlinked.', confirmLabel: 'Delete goal', danger: true }))) return
     run(async () => { await db.remove('goals', g.id); nav('/coach/goals') }, 'Goal deleted')
+  }
+  const draft = async () => {
+    setDrafting(true)
+    try {
+      const out = await askClaudeJSON<{ affirmations?: string[]; visualization?: string; journaling_prompts?: string[]; gratitude?: string; weekly_reflection?: string; actions?: string[] }>(`You help someone build a gentle, practical manifestation plan in a journaling app called Becoming.
+Goal: "${g.title}" (category: ${g.category})${g.description ? `\nWhy it matters to them: ${g.description}` : ''}${g.target_date ? `\nTarget date: ${g.target_date}` : ''}
+What they already have (do not repeat it): ${JSON.stringify(plan ?? {})}
+
+Reply with only a JSON object:
+{"affirmations": 4 believable first-person present-tense affirmations,
+ "visualization": a 3-4 sentence sensory scene implying the goal is achieved,
+ "journaling_prompts": 3 reflective prompts,
+ "gratitude": one short gratitude exercise,
+ "weekly_reflection": 2-3 questions for a weekly check-in,
+ "actions": 5 small, concrete, realistic next steps}
+Manifestation is a reflective practice; the practical actions matter as much as the mindset.`)
+      const p = plan ?? emptyPlan
+      const join = (a: string | null | undefined, b?: string) => (b ? (a?.trim() ? `${a.trim()}\n\n${b}` : b) : a ?? '')
+      setP({
+        affirmations: [...p.affirmations, ...(out.affirmations ?? []).filter((x) => typeof x === 'string')],
+        visualization: join(p.visualization, out.visualization),
+        journaling_prompts: [...p.journaling_prompts, ...(out.journaling_prompts ?? []).filter((x) => typeof x === 'string')],
+        gratitude: join(p.gratitude, out.gratitude),
+        weekly_reflection: join(p.weekly_reflection, out.weekly_reflection),
+        actions: [...p.actions, ...(out.actions ?? []).filter((x) => typeof x === 'string').map((text) => ({ id: uuid(), text, done: false }))],
+      })
+      toast('Suggestions added to your plan')
+    } catch (e) { toast((e as Error).message, 'error') }
+    finally { setDrafting(false) }
   }
   const toggleAction = (a: PlanAction) => setP({ actions: plan!.actions.map((x) => (x.id === a.id ? { ...x, done: !x.done } : x)) })
   const addAction = () => { if (!newAction.trim()) return; setP({ actions: [...(plan?.actions ?? []), { id: uuid(), text: newAction.trim(), done: false }] }); setNewAction('') }
@@ -125,8 +155,9 @@ export default function GoalDetail() {
               <div className="flex items-start gap-3 rounded-2xl border border-dashed border-sand p-4 text-[13px] text-ink-soft">
                 <Sparkles className="mt-0.5 size-4 shrink-0 text-blush-deep" />
                 <div>
-                  <p className="font-medium text-ink">AI-generated plans</p>
-                  <p>{aiStatus.chat ? 'Ask your coach to draft a plan for this goal, then edit it here.' : 'Requires an AI model, which isn’t connected. Your manual plan above is fully saved and works today.'}</p>
+                  <p className="font-medium text-ink">Draft with Claude</p>
+                  <p>{aiStatus.chat ? 'Claude can suggest affirmations, a visualization, prompts and practical steps for this goal. Suggestions are added to your plan, and you can edit or remove anything.' : 'Requires an AI model, which isn’t connected. Your manual plan above is fully saved and works today.'}</p>
+                  {aiStatus.chat && <Button size="sm" variant="primary" className="mt-2" icon={<Sparkles className="size-3.5" />} loading={drafting} onClick={draft}>Suggest a plan</Button>}
                 </div>
               </div>
             </div>

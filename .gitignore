@@ -15,3 +15,4 @@ exports/
 # Local tool settings (contain local paths)
 .claude/
 *.tsbuildinfo
+dist-artifact

@@ -21,7 +21,7 @@ export default function Evidence() {
 
   return (
     <div>
-      <p className="mb-6 max-w-2xl text-[14px] text-ink-soft">Real proof of who you already are — achievements, kind words, happy memories, brave moments. When an AI model is connected, it can bring these back to you when you need encouragement.</p>
+      <p className="mb-6 max-w-2xl text-[14px] text-ink-soft">Real proof of who you already are — achievements, kind words, happy memories, brave moments. When you ask Claude for encouragement, it can bring these real moments back to you.</p>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-1.5">
           <Chip active={!kind} onClick={() => setKind(null)}>Everything</Chip>

@@ -3,10 +3,10 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Lightbulb, Paperclip, Star, Trash2, X } from 'lucide-react'
 import { db, uuid } from '../../lib/db'
 import { requireUserId } from '../../lib/auth'
-import { cachedUrl, useAutosave, useData } from '../../lib/hooks'
+import { useAutosave, useData } from '../../lib/hooks'
 import type { Attachment, Goal, JournalEntry, LifeChapter, MoodEntry } from '../../lib/types'
 import { JOURNAL_PROMPTS, MOODS, REFLECTION_PROMPTS } from '../../data/content'
-import { bytes, cx, fmt, safeFileName, today } from '../../lib/utils'
+import { bytes, cx, downloadBlob, fmt, safeFileName, today } from '../../lib/utils'
 import { Button, ErrorState, Field, IconButton, Loading, SaveStatus, Select, Spinner, TagInput, useAction, useFeedback } from '../../components/ui'
 
 type Draft = Pick<JournalEntry, 'title' | 'body' | 'prompt' | 'entry_date' | 'tags' | 'favorite' | 'chapter_id' | 'goal_id' | 'attachments'>
@@ -83,8 +83,7 @@ export default function JournalEntryPage() {
       const added: Attachment[] = []
       for (const f of Array.from(files)) {
         if (f.size > 20 * 1024 * 1024) { toast(`${f.name} is larger than 20 MB`, 'error'); continue }
-        const path = `${requireUserId()}/journal/${eid}/${uuid().slice(0, 8)}-${safeFileName(f.name)}`
-        await db.upload('attachments', path, f, f.type)
+        const path = await db.upload('attachments', `${requireUserId()}/journal/${eid}/${uuid().slice(0, 8)}-${safeFileName(f.name)}`, f, f.type)
         added.push({ path, name: f.name, type: f.type, size: f.size })
       }
       const next = [...draft.attachments, ...added]
@@ -104,7 +103,7 @@ export default function JournalEntryPage() {
       set({ attachments: next })
     }, 'Attachment removed')
   }
-  const openAttachment = (a: Attachment) => run(async () => { window.open(await cachedUrl('attachments', a.path), '_blank', 'noopener') })
+  const openAttachment = (a: Attachment) => run(async () => { await downloadBlob(await db.download('attachments', a.path), a.name) })
 
   const addMood = (value: number) => run(async () => {
     if (!draft) return

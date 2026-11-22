@@ -2,6 +2,10 @@
 
 A private personal sanctuary for journaling, manifestation, vision boards, personal growth and reflection.
 
+**Main version: a private Claude artifact.** Open it at your claude.ai artifact link while signed in. Your data is stored privately on claude.ai, and the confidante, coach, Future Me, Ask my library, plan drafts and vision-board ideas run on your own Claude account — no API key and no extra cost. (Claude writes; it doesn't generate pictures.) To update it after code changes: `npm run build:artifact`, then ask Claude Code to publish `dist-artifact/page.html` to the same artifact (details in CLAUDE.md).
+
+The sections below describe the **website version** (GitHub Pages + Supabase), which still works but has no AI.
+
 - **Website:** a static React app hosted free on **GitHub Pages**
 - **Data, login and files:** your own free **Supabase** project (database, authentication, private storage)
 - **No other services.** No Vercel, Netlify, Firebase, AWS, or paid APIs.

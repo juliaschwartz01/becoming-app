@@ -6,6 +6,7 @@ import { useProfile } from '../lib/profile'
 import type { Memory, Profile } from '../lib/types'
 import { MEMORY_CATEGORIES } from '../data/content'
 import { exportMemories } from '../lib/account'
+import { isArtifact } from '../lib/config'
 import { cx, downloadJSON, fmt } from '../lib/utils'
 import { Badge, Button, Card, Chip, EmptyState, ErrorState, Field, Input, Loading, PageHeader, SectionTitle, Select, TagInput, Textarea, Toggle, useAction } from '../components/ui'
 import { AddButton, RowActions, useCrud } from '../components/SimpleCrud'
@@ -68,7 +69,7 @@ export default function MemoryPage() {
             checked={!!prefs?.memory_suggestions_enabled}
             onChange={(v) => run(() => savePrefs({ memory_suggestions_enabled: v }), v ? 'Memory suggestions on' : 'Memory suggestions off')}
             label="Allow the AI to suggest memories"
-            description="When an AI model is connected, it may propose things worth remembering. Suggestions are kept separate and never used until you approve them. Temporary feelings are not turned into permanent traits."
+            description="After you talk with Claude, it may propose lasting things worth remembering (never passing feelings). Suggestions wait here, separate, and are never used until you approve them. Each suggestion uses a little extra Claude usage."
           />
         </Card>
         {!pending.length ? <p className="text-[14px] text-ink-soft">No suggestions waiting.</p> : (
@@ -87,7 +88,9 @@ export default function MemoryPage() {
 
       <Card className="mt-12 flex gap-3 p-5 text-[13.5px] text-ink-soft">
         <Lock className="mt-0.5 size-4 shrink-0 text-sage-deep" />
-        <p>Your memories live in your own Supabase database, protected by Row Level Security. Knowledge Library sources are stored separately and are never mixed with memories about you. No AI provider is connected, so nothing is being sent anywhere.</p>
+        <p>{isArtifact
+          ? 'Your memories live in Becoming’s private storage on claude.ai, readable only with your Claude account. When you talk with Claude here, only the memories relevant to that message are included. Knowledge Library sources are kept separate from memories about you.'
+          : 'Your memories live in your own Supabase database, protected by Row Level Security. Knowledge Library sources are stored separately and are never mixed with memories about you. No AI provider is connected, so nothing is being sent anywhere.'}</p>
       </Card>
 
       {crud.modal('Add a memory', (f, set) => (

@@ -25,7 +25,7 @@ export default function AskLibrary() {
   return (
     <>
       <Link to="/library" className="mb-6 inline-flex items-center gap-1.5 text-[13.5px] text-ink-soft hover:text-ink"><ArrowLeft className="size-4" /> Library</Link>
-      <PageHeader eyebrow="Knowledge Library" title="Ask my library" intro="Ask a question and see exactly which passages in your saved sources are relevant. With an AI model connected, answers are written only from these passages, with citations." />
+      <PageHeader eyebrow="Knowledge Library" title="Ask my library" intro="Ask a question and see exactly which passages in your saved sources are relevant. Claude answers only from these passages, with citations." />
 
       <Card className="mb-10 p-6 sm:p-8">
         <p className="eyebrow mb-3">Find the sources (works now)</p>
@@ -60,7 +60,7 @@ export default function AskLibrary() {
         title="Questions for my library"
         placeholder="Ask a question about your saved sources…"
         emptyTitle="Ask about your books and notes"
-        emptyBody="Answers will only use passages retrieved from your library, each with a citation. Questions are saved even before an AI model is connected."
+        emptyBody="Answers will only use passages retrieved from your library, each with a citation. Your questions and answers are saved."
       />
     </>
   )

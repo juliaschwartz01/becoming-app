@@ -9,6 +9,7 @@ import type { Achievement, Goal, JournalEntry, MonthlyReview, MoodEntry, Practic
 import { buildReport } from '../../lib/report'
 import { EVENING_PRACTICES, EVIDENCE_KINDS, MORNING_PRACTICES, MOODS, methodByKey } from '../../data/content'
 import { aiStatus } from '../../ai'
+import { isArtifact } from '../../lib/config'
 import { downloadJSON, fmt } from '../../lib/utils'
 import { Button, Card, ErrorState, Field, IconButton, Loading, Textarea, useAction } from '../../components/ui'
 
@@ -57,8 +58,8 @@ export default function Report() {
           <IconButton label="Next month" onClick={() => setCursor(addMonths(cursor, 1))}><ChevronRight className="size-4" /></IconButton>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" icon={<Printer className="size-3.5" />} onClick={() => window.print()}>Print / save as PDF</Button>
-          {r && <Button size="sm" variant="ghost" onClick={() => downloadJSON({ report: r, highlights, intention_next: next }, `becoming-report-${month}.json`)}>Download data</Button>}
+          {!isArtifact && <Button size="sm" icon={<Printer className="size-3.5" />} onClick={() => window.print()}>Print / save as PDF</Button>}
+          {r && <Button size="sm" variant="ghost" onClick={() => run(() => downloadJSON({ report: r, highlights, intention_next: next }, `becoming-report-${month}.json`))}>Download data</Button>}
         </div>
       </div>
       {data.error && <ErrorState message={data.error} onRetry={data.reload} />}

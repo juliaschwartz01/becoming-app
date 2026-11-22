@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ReactNode } from 'react'
-import { HashRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { HashRouter, MemoryRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { isArtifact } from './lib/config'
 import { AuthProvider, useAuth } from './lib/auth'
 import { ProfileProvider, useProfile } from './lib/profile'
 import { ErrorState, FeedbackProvider, Loading, PageHeader, SubNav } from './components/ui'
@@ -46,8 +47,20 @@ function Section({ eyebrow, title, intro, tabs }: { eyebrow: string; title: Reac
 function Protected() {
   const auth = useAuth()
   if (auth.loading) return <div className="paper min-h-dvh"><Loading label="Opening your sanctuary…" /></div>
+  if (isArtifact && !auth.userId) return <ArtifactSignedOut />
   if (!auth.userId || auth.recovering) return <Login />
   return <ProfileProvider><Shell /></ProfileProvider>
+}
+
+function ArtifactSignedOut() {
+  return (
+    <div className="paper flex min-h-dvh items-center justify-center p-8">
+      <div className="max-w-md text-center">
+        <h1 className="font-display text-6xl">Becoming</h1>
+        <p className="mt-4 text-ink-soft">Your sanctuary opens only for you. Open this page on claude.ai while signed in to your Claude account to see your journal, boards and everything you’ve saved.</p>
+      </div>
+    </div>
+  )
 }
 
 function Shell() {
@@ -57,11 +70,14 @@ function Shell() {
   return <Layout />
 }
 
+// claude.ai only passes plain #names between the page and its address, so the artifact keeps routes in memory.
+const Router = isArtifact ? MemoryRouter : HashRouter
+
 const lazyPage = (el: ReactNode) => <Suspense fallback={<Loading />}>{el}</Suspense>
 
 export default function App() {
   return (
-    <HashRouter>
+    <Router>
       <AuthProvider>
         <FeedbackProvider>
           <Routes>
@@ -118,6 +134,6 @@ export default function App() {
           </Routes>
         </FeedbackProvider>
       </AuthProvider>
-    </HashRouter>
+    </Router>
   )
 }

@@ -22,7 +22,7 @@ export default function Confidante() {
         )}
       />
       <p className="mt-6 max-w-3xl text-[12.5px] leading-relaxed text-taupe-deep">
-        When an AI model is connected, your confidante is designed to be warm, curious and honest — supportive without simply agreeing, and willing to gently challenge you.
+        Your confidante is designed to be warm, curious and honest — supportive without simply agreeing, and willing to gently challenge you.
         It is not a therapist, won’t diagnose, and will encourage real-world support. If you are in crisis or thinking about harming yourself, please contact local emergency services
         or a crisis line (in the US, call or text 988).
       </p>

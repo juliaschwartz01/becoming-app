@@ -11,7 +11,7 @@ import type { BoardElement, Goal, LifeChapter, ManifestationPlan, Vision, Vision
 import { BOARD_BACKGROUNDS, TEXT_DEFAULTS, arrange, renderBoardPng } from '../../lib/board'
 import { saveVisionImage } from '../../lib/images'
 import { CATEGORIES, DEFAULT_AFFIRMATIONS } from '../../data/content'
-import { aiStatus, visionToPrompt } from '../../ai'
+import { aiStatus, askClaudeJSON, visionToPrompt } from '../../ai'
 import { cx, downloadBlob, fmt, safeFileName } from '../../lib/utils'
 import { Button, Card, Chip, ErrorState, Field, IconButton, Input, Loading, Modal, SaveStatus, Select, Spinner, Textarea, useAction, useFeedback } from '../../components/ui'
 import { Thumb } from './Envision'
@@ -123,7 +123,7 @@ export default function BoardEditor() {
     try {
       await autosave.flush()
       const blob = await renderBoardPng(board.data, els, async (imageId) => cachedUrl('vision-images', imagePath(imageId)!))
-      downloadBlob(blob, `${safeFileName(board.data.title)}.png`)
+      await downloadBlob(blob, `${safeFileName(board.data.title)}.png`)
       toast('Board exported as PNG')
     } catch (e) { toast((e as Error).message, 'error') }
     finally { setExporting(false) }
@@ -200,7 +200,7 @@ export default function BoardEditor() {
 
       <div className={cx('grid gap-4', panel ? 'xl:grid-cols-[1fr_340px]' : '')}>
         <Canvas board={b} els={els} selected={selected} onSelect={setSelected} onChange={update} imagePath={imagePath} />
-        {panel === 'vision' && <VisionPanel board={b} />}
+        {panel === 'vision' && <VisionPanel board={b} onAdd={(type, t) => addText(type, t)} />}
         {panel === 'design' && (
           <Card className="h-fit space-y-6 p-5">
             <div>
@@ -354,7 +354,12 @@ function ImageFill({ path, fit }: { path: string | null; fit: 'cover' | 'contain
 
 // ---------------------------------------------------------------------------
 // The "conversation" side panel: your written visions for this board.
-function VisionPanel({ board }: { board: VisionBoard }) {
+interface BoardIdeas { reflection?: string; affirmations?: string[]; phrases?: string[]; image_prompts?: string[] }
+
+function VisionPanel({ board, onAdd }: { board: VisionBoard; onAdd: (type: 'text' | 'affirmation', text: string) => void }) {
+  const [ideas, setIdeas] = useState<BoardIdeas | null>(null)
+  const [thinking, setThinking] = useState(false)
+  const [ideaError, setIdeaError] = useState<string | null>(null)
   const visions = useData(() => db.list<Vision>('visions', { match: { board_id: board.id }, order: [{ col: 'created_at', asc: true }] }), [board.id])
   const [text, setText] = useState('')
   const { run, busy } = useAction()
@@ -371,6 +376,24 @@ function VisionPanel({ board }: { board: VisionBoard }) {
     run(async () => { await db.remove('visions', v.id); visions.setData((l) => l?.filter((x) => x.id !== v.id)) })
   }
   const copy = (s: string) => run(async () => { await navigator.clipboard.writeText(s) }, 'Prompt copied')
+  const askIdeas = async () => {
+    const texts = (visions.data ?? []).map((v) => v.description)
+    if (!texts.length) return
+    setThinking(true); setIdeaError(null)
+    try {
+      const out = await askClaudeJSON<BoardIdeas>(`You help someone design a personal vision board in a calm, elegant journaling app called Becoming.
+Board: "${board.title}" (theme: ${board.category}). Their own descriptions of the life they want:
+${texts.map((v) => `- ${v}`).join('\n')}
+
+Reply with only a JSON object:
+{"reflection": one or two warm sentences reflecting back what stands out in their vision,
+ "affirmations": 5 short first-person, present-tense affirmations in their spirit (believable, not cheesy),
+ "phrases": 5 short words or phrases (1-4 words) to place on the board as text,
+ "image_prompts": 3 detailed prompts for soft, cinematic lifestyle photographs that capture this vision (no real people's names)}`)
+      setIdeas(out)
+    } catch (e) { setIdeaError((e as Error).message) }
+    finally { setThinking(false) }
+  }
 
   return (
     <Card className="flex h-fit max-h-[80vh] flex-col overflow-hidden">
@@ -391,8 +414,20 @@ function VisionPanel({ board }: { board: VisionBoard }) {
         ))}
         {!visions.data?.length && !visions.loading && <p className="font-display text-[1.15rem] italic text-ink-soft">“I want to visualize my dream life in New York — a successful career, a beautiful apartment, wonderful friendships, exciting travel, and feeling confident and happy.”</p>}
         <div className="rounded-2xl bg-blush-50/70 p-3 text-[12px] text-ink-soft">
-          {aiStatus.chat && aiStatus.image ? 'Your AI can turn these visions into image prompts and update this board.' : 'When an AI model is connected, it can turn these descriptions into image-generation prompts and suggest board updates. For now your visions are saved, and you can copy a draft prompt.'}
+          {aiStatus.chat
+            ? 'Claude can read your visions and suggest affirmations, words for the board and detailed image prompts. (Claude writes; it doesn’t create pictures.)'
+            : 'When an AI model is connected, it can turn these descriptions into image-generation prompts and suggest board updates. For now your visions are saved, and you can copy a draft prompt.'}
+          {aiStatus.chat && <div className="mt-2"><Button size="sm" variant="primary" icon={<Sparkles className="size-3.5" />} loading={thinking} disabled={!visions.data?.length} onClick={askIdeas}>{ideas ? 'Ask again' : 'Ask Claude for ideas'}</Button></div>}
+          {ideaError && <p className="mt-2 text-[#9a4a3f]">{ideaError}</p>}
         </div>
+        {ideas && (
+          <div className="space-y-4 rounded-2xl border border-beige/70 bg-white/70 p-4 text-[13.5px] animate-rise">
+            {ideas.reflection && <p className="font-display text-[1.1rem] italic">{ideas.reflection}</p>}
+            {!!ideas.affirmations?.length && <IdeaList title="Affirmations" items={ideas.affirmations} action="Add" onPick={(t) => onAdd('affirmation', t)} />}
+            {!!ideas.phrases?.length && <IdeaList title="Words for the board" items={ideas.phrases} action="Add" onPick={(t) => onAdd('text', t)} />}
+            {!!ideas.image_prompts?.length && <IdeaList title="Image prompts" items={ideas.image_prompts} action="Copy" onPick={copy} />}
+          </div>
+        )}
         <div ref={endRef} />
       </div>
       <form className="border-t border-beige/70 p-3" onSubmit={(e) => { e.preventDefault(); text.trim() && save() }}>
@@ -400,6 +435,22 @@ function VisionPanel({ board }: { board: VisionBoard }) {
         <Button type="submit" variant="primary" size="sm" className="mt-2 w-full" loading={busy} disabled={!text.trim()}>Save vision</Button>
       </form>
     </Card>
+  )
+}
+
+function IdeaList({ title, items, action, onPick }: { title: string; items: string[]; action: string; onPick: (t: string) => void }) {
+  return (
+    <div>
+      <p className="eyebrow mb-1.5">{title}</p>
+      <ul className="space-y-1">
+        {items.filter((x) => typeof x === 'string').map((t) => (
+          <li key={t} className="flex items-start gap-2">
+            <span className="flex-1">{t}</span>
+            <button onClick={() => onPick(t)} className="shrink-0 text-[12px] text-sage-deep underline decoration-sage-200 underline-offset-2 cursor-pointer">{action}</button>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

@@ -16,14 +16,17 @@
 // never in this frontend code or in GitHub.
 // =============================================================================
 
-import { config } from '../lib/config'
+import { config, isArtifact } from '../lib/config'
 import { db, supabase } from '../lib/db'
+import { getSample } from '../lib/artifact'
+import { systemPrompt } from './prompts'
 import type {
   Achievement, Citation, ConversationKind, Goal, Memory, Message, PassageHit, Profile,
 } from '../lib/types'
 
 export const aiStatus = {
-  chat: config.cloud && config.aiEnabled,
+  /** On claude.ai: Claude through your own account. On the website: only once a provider is connected. */
+  chat: isArtifact || (config.cloud && config.aiEnabled),
   image: config.cloud && config.imageGenerationEnabled,
   transcription: config.cloud && config.transcriptionEnabled,
 }
@@ -96,18 +99,93 @@ export class AINotConfiguredError extends Error {
   constructor(what = 'An AI model') { super(`${what} isn’t connected yet. See Settings → AI connection.`) }
 }
 
-/** Send a conversation turn to the server-side AI function. Never simulated. */
+/** Turn Claude's sampling errors into plain words. */
+export function aiErrorMessage(e: unknown): string {
+  const code = (e as { code?: string })?.code
+  switch (code) {
+    case 'not_granted': return 'Becoming isn’t allowed to use Claude in this view. You can allow it from the artifact’s Permissions menu.'
+    case 'sampling_disabled': return 'Claude isn’t available for this account.'
+    case 'rate_limited': return (e as { reason?: string }).reason === 'usage_limit' ? 'You’ve reached your Claude usage limit for now. Try again later.' : 'Too many requests at once. Wait a moment and try again.'
+    case 'session_expired': return 'Your claude.ai session expired. Sign in again and reload.'
+    case 'refused': return 'Claude declined to answer that. Try rephrasing.'
+    case 'prompt_too_large': return 'That’s too much text for one request. Try something shorter.'
+    case 'cancelled': return 'Stopped.'
+    case 'invalid_json': return 'Claude’s answer came back in an unexpected format. Try again.'
+    default: return (e as { message?: string })?.message || 'Claude didn’t respond. Try again.'
+  }
+}
+
+/** Ask Claude through the viewer's own account (claude.ai build). */
+async function sampleOrThrow() {
+  const sample = await getSample()
+  if (!sample) throw new AINotConfiguredError('Claude')
+  return sample
+}
+
+/** Send a conversation turn. Never simulated: it either reaches a real model or fails clearly. */
 export async function sendChat(input: {
   kind: ConversationKind
   mode?: string | null
   message: string
   context: ContextBundle
+  onText?: (text: string) => void
+  signal?: AbortSignal
 }): Promise<ChatReply> {
+  if (isArtifact) {
+    const sample = await sampleOrThrow()
+    const rules = systemPrompt(input.kind, input.mode, input.context)
+    const history = input.context.recent.filter((m) => m.role !== 'system' && m.content.trim()) as { role: 'user' | 'assistant'; content: string }[]
+    const turns = history.length && history[history.length - 1].role === 'user' ? history : [...history, { role: 'user' as const, content: input.message }]
+    try {
+      const { text } = await sample([{ role: 'user', content: `${rules}\n\n(These are standing instructions and context for the conversation that follows.)` }, ...turns], {
+        cache: false,
+        signal: input.signal,
+        modelTier: 'default',
+        onText: input.onText ? ({ text }: { text: string }) => input.onText!(text) : undefined,
+      })
+      return { content: text, citations: citationsFrom(text, input.context), memory_ids: input.context.memories.map((m) => m.id) }
+    } catch (e) {
+      throw new Error(aiErrorMessage(e))
+    }
+  }
   if (!aiStatus.chat || !supabase) throw new AINotConfiguredError()
-  const { data, error } = await supabase.functions.invoke('ai-chat', { body: input })
+  const { data, error } = await supabase.functions.invoke('ai-chat', { body: { kind: input.kind, mode: input.mode, message: input.message, context: input.context } })
   if (error) throw new Error(error.message || 'The AI service did not respond.')
   if (!data?.content) throw new Error('The AI service returned an empty reply.')
   return data as ChatReply
+}
+
+/** Map [n] markers in a reply to the library passages that were actually provided. */
+export function citationsFrom(text: string, context: ContextBundle): Citation[] {
+  const cited = new Set(Array.from(text.matchAll(/\[(\d+)\]/g)).map((m) => Number(m[1]) - 1))
+  return context.passages.filter((_, i) => cited.has(i)).map((p) => ({ resource_id: p.resource_id, passage_id: p.passage_id, page: p.page_number, title: p.resource_title }))
+}
+
+/** A one-off request for structured ideas (vision boards, plans). Claude account only. */
+export async function askClaudeJSON<T>(prompt: string, opts: { quick?: boolean } = {}): Promise<T> {
+  if (!isArtifact) throw new AINotConfiguredError()
+  const sample = await sampleOrThrow()
+  try { return await sample.json<T>(prompt, { cache: false, modelTier: opts.quick ? 'quick' : 'default' }) }
+  catch (e) { throw new Error(aiErrorMessage(e)) }
+}
+
+/**
+ * Lasting facts worth remembering from one message — only when the user has
+ * switched memory suggestions on. Suggestions wait for approval on the Memory page.
+ */
+export async function suggestMemories(message: string, known: string[]): Promise<string[]> {
+  if (!isArtifact) return []
+  const out = await askClaudeJSON<unknown>(`You help a private journaling app remember things about its one user.
+From the user's message below, extract at most 2 LASTING facts or preferences that would still be true in months (values, important people, long-term goals, how they like to be supported, real milestones).
+Never record temporary feelings, moods, one-off events, or anything uncertain. Write each as a short third-person sentence starting with "The user".
+Skip anything already known. Reply with only a JSON array of strings (possibly empty), e.g. ["The user is training for a half marathon in May."].
+
+ALREADY KNOWN:
+${known.slice(0, 30).map((k) => `- ${k}`).join('\n') || '(nothing yet)'}
+
+MESSAGE:
+${message.slice(0, 4000)}`, { quick: true })
+  return Array.isArray(out) ? out.filter((x): x is string => typeof x === 'string' && x.trim().length > 0).slice(0, 2) : []
 }
 
 /**
