@@ -53,8 +53,9 @@ Stage 1 — Foundation
 
 Stage 2 — Supabase
 - [x] SQL migrations, RLS on every table, private storage buckets, security check script
-- [ ] Owner creates Supabase project, runs migrations, creates account, disables sign-ups (guided in README)
-- [ ] Connect `.env.local` and test save/load/edit/delete against the real project
+- [x] Supabase project `itncungddtelykrhouvv` created; migrations 001 + 002 applied (25 tables RLS-protected, 100 policies, 3 private buckets); owner account created; sign-ups disabled (verified: signup_disabled)
+- [x] `.env.local` connected (gitignored). Verified as anonymous: tables 401, RPC denied, storage list empty
+- [ ] Owner signs in and tests save/load/edit/delete against the real project
 
 Stage 3 — Functional (all persist via `db`)
 - [x] Journal (autosave, prompts, tags, favorites, calendar, search, attachments, D/W/M views, mood links)
@@ -78,7 +79,7 @@ Stage 4 — AI-ready
 Stage 5 — Deployment
 - [x] GitHub Actions workflow (tests → build → Pages), `.gitignore` for secrets/exports
 - [x] Create `becoming-app` repo (github.com/juliaschwartz01/becoming-app, public), push, enable Pages (build type: workflow). First run: tests passed, build/deploy skipped pending variables.
-- [ ] Add repo variables `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (`gh variable set`) → site goes live at https://juliaschwartz01.github.io/becoming-app/
+- [x] Repo variables set; site live at https://juliaschwartz01.github.io/becoming-app/
 - [ ] Supabase Auth Site URL + redirect URLs; test live login, cross-device persistence, signed-out access
 
 Stage 6 — Testing
